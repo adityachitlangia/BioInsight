@@ -20,8 +20,7 @@ BioInsight is a data analytics and machine learning platform designed to analyze
 
 ## Project Structure
 ```
-├── data/
-│   └── Wrangled_Combined_Batch_Dataset.xlsx  # Main dataset
+├── Wrangled_Combined_Batch_Dataset.xlsx      # Main dataset 
 ├── models/                                   # Trained model files
 ├── src/
 │   ├── dashboard/
