@@ -39,7 +39,7 @@ BioInsight is a data analytics and machine learning platform designed to analyze
 ### Installation
 1. Clone this repository
 ```bash
-git clone https://github.com/yourusername/bioinsight.git
+git clone https://github.com/adityachitlangia/BioInsight.git
 cd bioinsight
 ```
 
