@@ -56,10 +56,10 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Running the Dashboard
+### Running the Dashboard (You will need to upload Wrangled_Combined_Batch_Dataset.xlsx under data directory)
 To launch the BioInsight dashboard:
 ```bash
-cd src/dashboard
+cd src/dashboard 
 streamlit run app.py
 ```
 
@@ -89,11 +89,5 @@ python src/model_development.py
 - Analyze PLS components and explained variance
 - Make interactive predictions
 
-## Screenshots
-*[Add screenshots of your dashboard here]*
-
-## License
-[Choose an appropriate license for your project]
-
 ## Contributors
-- Your Name 
+- Aditya Chitlangia
