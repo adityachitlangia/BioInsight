@@ -39,25 +39,25 @@ st.markdown("""
         background-color: white;
         border-radius: 5px;
     }
-    .css-1d391kg {
-        background-color: #ffffff;
-        padding: 2rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
     .stAlert {
         border-radius: 10px;
-    }
-    .metric-card {
-        background-color: white;
-        padding: 1rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        margin-bottom: 1rem;
     }
     .header {
         color: #2c3e50;
         font-weight: bold;
+        margin-bottom: 1rem;
+    }
+    /* Remove card-like styling */
+    .css-1d391kg {
+        background-color: transparent;
+        padding: 0;
+        box-shadow: none;
+    }
+    .metric-card {
+        background-color: transparent;
+        padding: 0;
+        box-shadow: none;
+        margin-bottom: 1rem;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -65,14 +65,34 @@ st.markdown("""
 def load_data():
     """Load and return the data pipeline"""
     try:
-        data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
-                               'Wrangled_Combined_Batch_Dataset.xlsx')
+        # Get the absolute path to the project root directory
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        data_path = os.path.join(project_root, 'Wrangled_Combined_Batch_Dataset.xlsx')
+        
+        # Debug information
+        st.write(f"Project root directory: {project_root}")
+        st.write(f"Looking for data file at: {data_path}")
+        st.write(f"File exists: {os.path.exists(data_path)}")
+        
+        if not os.path.exists(data_path):
+            st.error(f"Data file not found at: {data_path}")
+            # List files in the project root directory
+            st.write("Files in project root directory:")
+            for file in os.listdir(project_root):
+                if file.endswith('.xlsx'):
+                    st.write(f"- {file}")
+            return None
+        
+        # Create the model development pipeline
         pipeline = ModelDevelopment(data_path)
         if pipeline.load_data():
             return pipeline
         return None
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
+        # Show stack trace for debugging
+        import traceback
+        st.code(traceback.format_exc())
         return None
 
 def plot_missing_values(df, title):
@@ -439,27 +459,23 @@ def main():
             key="scale_select"
         )
         
-        # Show original data statistics in cards
+        # Show original data statistics
         st.markdown('<h3 class="header">Original Data Overview</h3>', unsafe_allow_html=True)
         subset_data = st.session_state.pipeline.process_data[
             st.session_state.pipeline.process_data['Scale'] == scale].copy()
         
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
             st.write("Data Shape:", subset_data.shape)
             st.write("Missing Values Before Forward Fill:")
             st.write(subset_data.isnull().sum())
-            st.markdown('</div>', unsafe_allow_html=True)
             
         with col2:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
             st.plotly_chart(plot_missing_values(subset_data, 
                 f"Missing Values Heatmap - {scale} (Before Forward Fill)"), 
                 use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
         
-        # Show data after forward fill in cards
+        # Show data after forward fill
         st.markdown('<h3 class="header">Data After Forward Fill</h3>', unsafe_allow_html=True)
         batch_ids = subset_data['Batch ID'].copy()
         filled_data = subset_data.groupby('Batch ID').ffill()
@@ -467,29 +483,22 @@ def main():
         
         col3, col4 = st.columns(2)
         with col3:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
             st.write("Missing Values After Forward Fill:")
             st.write(filled_data.isnull().sum())
-            st.markdown('</div>', unsafe_allow_html=True)
             
         with col4:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
             st.plotly_chart(plot_missing_values(filled_data, 
                 f"Missing Values Heatmap - {scale} (After Forward Fill)"), 
                 use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
         
-        # Show batch statistics in a card
+        # Show batch statistics
         st.markdown('<h3 class="header">Batch Statistics</h3>', unsafe_allow_html=True)
-        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
         numeric_cols = ['DO (%)', 'pH', 'OD', 'Temperature (deg C)']
         stats_data = filled_data[numeric_cols].describe()
         st.write(stats_data)
-        st.markdown('</div>', unsafe_allow_html=True)
         
-        # Time series analysis with improved styling
+        # Time series analysis
         st.markdown('<h3 class="header">Time Series Analysis</h3>', unsafe_allow_html=True)
-        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
         
         time_series_features = ['DO (%)', 'pH', 'OD', 'Temperature (deg C)', 'kLa (1/h)']
         available_features = [f for f in time_series_features if f in filled_data.columns]
@@ -517,7 +526,6 @@ def main():
                     st.error(f"Required columns 'Culture Time (h)' and '{feature}' not found in data")
         else:
             st.warning("No time series features available in the data")
-        st.markdown('</div>', unsafe_allow_html=True)
 
     # Feature Selection Section
     elif page == "Feature Selection":

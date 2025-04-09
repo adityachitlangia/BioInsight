@@ -24,25 +24,36 @@ class ModelDevelopment:
         self.label_encoders = {}
         
     def load_data(self):
-        """Load data from Excel sheets"""
+        """Load data from Excel file"""
         try:
-            self.process_data = pd.read_excel(self.file_path, sheet_name='Process Data')
-            self.initial_conditions = pd.read_excel(self.file_path, sheet_name='Initial Conditions')
-            self.process_kpis = pd.read_excel(self.file_path, sheet_name='Process KPIs')
+            # Get the absolute path to the project root directory
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            data_path = os.path.join(project_root, 'Wrangled_Combined_Batch_Dataset.xlsx')
             
-            # Clean column names
-            self.process_data.columns = self.process_data.columns.str.strip()
-            self.initial_conditions.columns = self.initial_conditions.columns.str.strip()
-            self.process_kpis.columns = self.process_kpis.columns.str.strip()
+            # Debug information
+            print(f"Project root directory: {project_root}")
+            print(f"Looking for data file at: {data_path}")
+            print(f"File exists: {os.path.exists(data_path)}")
+            
+            if not os.path.exists(data_path):
+                print(f"Data file not found at: {data_path}")
+                # List files in the project root directory
+                print("Files in project root directory:")
+                for file in os.listdir(project_root):
+                    if file.endswith('.xlsx'):
+                        print(f"- {file}")
+                return False
+            
+            # Load the Excel file
+            self.process_data = pd.read_excel(data_path, sheet_name='Process Data')
+            self.initial_conditions = pd.read_excel(data_path, sheet_name='Initial Conditions')
+            self.process_kpis = pd.read_excel(data_path, sheet_name='Process KPIs')
             
             print("Data loaded successfully!")
             print(f"Process Data shape: {self.process_data.shape}")
             print(f"Initial Conditions shape: {self.initial_conditions.shape}")
             print(f"Process KPIs shape: {self.process_kpis.shape}")
             
-            print("\nProcess Data columns:", self.process_data.columns.tolist())
-            print("\nInitial Conditions columns:", self.initial_conditions.columns.tolist())
-            print("\nProcess KPIs columns:", self.process_kpis.columns.tolist())
             return True
         except Exception as e:
             print(f"Error loading data: {str(e)}")
