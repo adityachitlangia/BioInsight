@@ -1,4 +1,4 @@
-# BioInsight: Bioprocess Analytics Dashboard
+# BioInsight
 
 ## Project Overview
 BioInsight is a data analytics and machine learning platform designed to analyze, visualize, and predict bioprocess outcomes. This project focuses on analyzing bioprocess data across different scales (1 mL and 30 L) to predict key performance indicators such as Final OD and GFPuv production.
