@@ -9,6 +9,11 @@ from pathlib import Path
 import sys
 import os
 from sklearn.metrics import mean_squared_error, r2_score
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import LabelEncoder
+from sklearn.feature_selection import SelectKBest, f_regression
 
 # Set page config must be the first Streamlit command
 st.set_page_config(
@@ -70,17 +75,17 @@ def load_data():
         data_path = os.path.join(project_root, 'Wrangled_Combined_Batch_Dataset.xlsx')
         
         # Debug information
-        st.write(f"Project root directory: {project_root}")
-        st.write(f"Looking for data file at: {data_path}")
-        st.write(f"File exists: {os.path.exists(data_path)}")
+        print(f"Project root directory: {project_root}")
+        print(f"Looking for data file at: {data_path}")
+        print(f"File exists: {os.path.exists(data_path)}")
         
         if not os.path.exists(data_path):
             st.error(f"Data file not found at: {data_path}")
             # List files in the project root directory
-            st.write("Files in project root directory:")
+            print("Files in project root directory:")
             for file in os.listdir(project_root):
                 if file.endswith('.xlsx'):
-                    st.write(f"- {file}")
+                    print(f"- {file}")
             return None
         
         # Create the model development pipeline
@@ -282,27 +287,67 @@ def plot_pls_components(model, X, y, title):
         return None, None
 
 def load_models_and_scalers(scale, target):
-    """Load models, scaler, and label encoders for a given scale and target"""
+    """Load trained models, scalers, and other artifacts"""
     try:
-        scale_clean = scale.replace(' ', '_')
-        target_clean = target.replace(' ', '_').replace('(', '').replace(')', '').replace('/', '_per_')
-        base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        # Format target and scale for file paths
+        target_formatted = target.replace(' ', '_').replace('(', '').replace(')', '').replace('/', '_per_')
+        scale_formatted = scale.replace(' ', '_')
         
-        # Load scaler and encoders first
-        scaler = joblib.load(os.path.join(base_path, 'models', f"scaler_{scale_clean}_{target_clean}.joblib"))
-        label_encoders = joblib.load(os.path.join(base_path, 'models', f"label_encoders_{scale_clean}_{target_clean}.joblib"))
+        # Base path for models
+        base_path = 'models'
         
-        # Load models
+        # Load regression models
         models = {}
-        model_names = ['RandomForest', 'XGBoost', 'SVR', 'PLS']
-        for model_name in model_names:
-            model_path = os.path.join(base_path, 'models', f"{model_name}_{scale_clean}_{target_clean}.joblib")
-            models[model_name] = joblib.load(model_path)
-            
-        return models, scaler, label_encoders
+        model_types = ['RandomForest', 'XGBoost', 'SVR', 'PLS']
+        for model_type in model_types:
+            model_path = os.path.join(base_path, f"{model_type}_{scale_formatted}_{target_formatted}.joblib")
+            if os.path.exists(model_path):
+                models[model_type] = joblib.load(model_path)
+            else:
+                st.warning(f"Model {model_type} not found at {model_path}")
+        
+        # Load outlier detection models
+        outlier_models = {}
+        outlier_model_types = ['PCA_X', 'OPLS', 'IsolationForest', 'OneClassSVM']
+        for model_type in outlier_model_types:
+            model_path = os.path.join(base_path, f"{model_type}_{scale_formatted}_{target_formatted}.joblib")
+            if os.path.exists(model_path):
+                outlier_models[model_type] = joblib.load(model_path)
+            else:
+                st.warning(f"Outlier model {model_type} not found at {model_path}")
+        
+        # Load scaler
+        scaler_path = os.path.join(base_path, f"scaler_{scale_formatted}_{target_formatted}.joblib")
+        scaler = joblib.load(scaler_path) if os.path.exists(scaler_path) else None
+        
+        # Load outlier detection scaler
+        outlier_scaler_path = os.path.join(base_path, f"outlier_scaler_{scale_formatted}_{target_formatted}.joblib")
+        outlier_scaler = joblib.load(outlier_scaler_path) if os.path.exists(outlier_scaler_path) else None
+        
+        # Load feature names
+        features_path = os.path.join(base_path, f"features_{scale_formatted}_{target_formatted}.joblib")
+        features = joblib.load(features_path) if os.path.exists(features_path) else None
+        
+        # Load encoders
+        encoders_path = os.path.join(base_path, f"encoders_{scale_formatted}_{target_formatted}.joblib")
+        encoders = joblib.load(encoders_path) if os.path.exists(encoders_path) else None
+        
+        # Load feature selector
+        selector_path = os.path.join(base_path, f"selector_{scale_formatted}_{target_formatted}.joblib")
+        selector = joblib.load(selector_path) if os.path.exists(selector_path) else None
+        
+        return {
+            'models': models,
+            'outlier_models': outlier_models,
+            'scaler': scaler,
+            'outlier_scaler': outlier_scaler,
+            'features': features,
+            'encoders': encoders,
+            'selector': selector
+        }
     except Exception as e:
         st.error(f"Error loading models and scalers: {str(e)}")
-        return None, None, None
+        return None
 
 def plot_feature_distribution(data, feature):
     """Plot enhanced feature distribution with interactive elements and statistics"""
@@ -417,6 +462,120 @@ def plot_feature_distribution(data, feature):
     
     return fig, stats_table
 
+def plot_dimension_reduction(X, outlier_model, model_name, title):
+    """Plot the PCA-X or OPLS results for outlier detection visualization"""
+    try:
+        if model_name in ['PCA_X', 'OPLS']:
+            # Transform data using the model
+            X_transformed = outlier_model.transform(X)
+            
+            # Create a DataFrame with the transformed data
+            component_names = [f"Component 1", f"Component 2"]
+            df_transformed = pd.DataFrame(X_transformed[:, :2], columns=component_names)
+            
+            # Add the original index as a column
+            df_transformed['Sample'] = [f"Sample {i+1}" for i in range(len(df_transformed))]
+            
+            # Create a scatter plot using Plotly
+            fig = px.scatter(
+                df_transformed, 
+                x=component_names[0], 
+                y=component_names[1],
+                hover_name='Sample',
+                title=title,
+                labels={component_names[0]: component_names[0], component_names[1]: component_names[1]},
+                height=600
+            )
+            
+            # Add a confidence ellipse if enough points
+            if len(df_transformed) > 5:
+                # Calculate center and standard deviation
+                center_x = df_transformed[component_names[0]].mean()
+                center_y = df_transformed[component_names[1]].mean()
+                std_x = df_transformed[component_names[0]].std() * 2  # 95% confidence interval
+                std_y = df_transformed[component_names[1]].std() * 2
+                
+                # Add confidence ellipse
+                theta = np.linspace(0, 2*np.pi, 100)
+                x = center_x + std_x * np.cos(theta)
+                y = center_y + std_y * np.sin(theta)
+                
+                fig.add_trace(go.Scatter(
+                    x=x, y=y,
+                    mode='lines',
+                    line=dict(color='rgba(255, 0, 0, 0.5)', width=2, dash='dash'),
+                    name='95% Confidence Interval'
+                ))
+            
+            return fig
+        else:
+            st.warning(f"Model {model_name} is not supported for dimension reduction plots.")
+            return None
+    except Exception as e:
+        st.error(f"Error plotting dimension reduction: {str(e)}")
+        return None
+
+def plot_outlier_scores(X, outlier_models, selected_models, title):
+    """Plot outlier scores for selected models"""
+    try:
+        results = {}
+        scores_df = pd.DataFrame()
+        
+        # Get outlier scores for each selected model
+        for model_name in selected_models:
+            if model_name in outlier_models:
+                model = outlier_models[model_name]
+                
+                # Get scores based on model type
+                if model_name == 'IsolationForest':
+                    # For Isolation Forest, higher scores (closer to 1) are inliers
+                    scores = model.decision_function(X)
+                    scores = (scores - scores.min()) / (scores.max() - scores.min())  # Normalize to 0-1
+                elif model_name == 'OneClassSVM':
+                    # For One-Class SVM, higher scores (positive) are inliers
+                    scores = model.decision_function(X)
+                    scores = (scores - scores.min()) / (scores.max() - scores.min())  # Normalize to 0-1
+                else:
+                    continue
+                
+                # Store scores
+                scores_df[model_name] = scores
+                results[model_name] = scores
+        
+        if scores_df.empty:
+            st.warning("No scores available for the selected models.")
+            return None
+        
+        # Add sample index
+        scores_df['Sample'] = [f"Sample {i+1}" for i in range(len(scores_df))]
+        
+        # Melt the DataFrame for Plotly
+        melted_df = pd.melt(scores_df, id_vars=['Sample'], var_name='Model', value_name='Score')
+        
+        # Create a box plot using Plotly
+        box_fig = px.box(
+            melted_df, 
+            x='Model', 
+            y='Score',
+            title=f"{title} - Outlier Scores Distribution",
+            height=400
+        )
+        
+        # Create a scatter plot for individual samples
+        scatter_fig = px.scatter(
+            melted_df, 
+            x='Sample', 
+            y='Score',
+            color='Model',
+            title=f"{title} - Outlier Scores by Sample",
+            height=500
+        )
+        
+        return {'box': box_fig, 'scatter': scatter_fig, 'scores': results}
+    except Exception as e:
+        st.error(f"Error plotting outlier scores: {str(e)}")
+        return None
+
 def main():
     # Custom header
     st.markdown("""
@@ -444,7 +603,7 @@ def main():
         
         page = st.radio(
             "Go to",
-            ["Data Processing", "Feature Selection", "Model Results"],
+            ["Data Processing", "Feature Selection", "Model Results", "Outlier Detection"],
             label_visibility="collapsed"
         )
 
@@ -537,9 +696,61 @@ def main():
             ["Final OD (OD 600)", "GFPuv (g/L)"])
         
         try:
-            # Prepare data and select features
-            X, y, feature_cols = st.session_state.pipeline.prepare_data(scale, target)
-            X_selected, feature_importance = st.session_state.pipeline.select_features(X, y)
+            # Prepare data
+            data = st.session_state.pipeline.prepare_data(scale, target)
+            if data is None or len(data) == 0:
+                st.error(f"No data available for {scale} with target {target}")
+                return
+                
+            # Format X and y for feature selection
+            X = data.drop(columns=[target])
+            y = data[target]
+            
+            # Drop date columns
+            date_columns = [col for col in X.columns if 'Date' in col or X[col].dtype.name in ['datetime64[ns]', 'datetime64']]
+            if date_columns:
+                X = X.drop(columns=date_columns)
+            
+            # Make a copy for encoding
+            X_encoded = X.copy()
+            
+            # Identify columns that need encoding (not just object dtype, but anything non-numeric)
+            numeric_cols = X_encoded.select_dtypes(include=['int64', 'float64']).columns
+            categorical_cols = [col for col in X_encoded.columns if col not in numeric_cols]
+            
+            st.write(f"Numerical columns: {len(numeric_cols)}")
+            st.write(f"Categorical columns to encode: {len(categorical_cols)}, {categorical_cols}")
+            
+            # Encode all non-numeric columns
+            for col in categorical_cols:
+                le = LabelEncoder()
+                # Handle NaN values if present
+                if X_encoded[col].isna().any():
+                    X_encoded[col] = X_encoded[col].fillna('missing')
+                X_encoded[col] = le.fit_transform(X_encoded[col].astype(str))
+            
+            # Verify all columns are now numeric
+            if not all(X_encoded.dtypes.apply(lambda x: np.issubdtype(x, np.number))):
+                non_numeric = [col for col in X_encoded.columns if not np.issubdtype(X_encoded[col].dtype, np.number)]
+                st.error(f"Some columns are still non-numeric after encoding: {non_numeric}")
+                return
+            
+            # Now apply feature selection
+            selector = SelectKBest(f_regression, k=10)
+            X_selected_array = selector.fit_transform(X_encoded, y)
+            
+            # Get selected feature names and scores
+            selected_features = X_encoded.columns[selector.get_support()].tolist()
+            feature_scores = selector.scores_
+            
+            # Create feature importance dataframe
+            feature_importance = pd.DataFrame({
+                'feature': X_encoded.columns,
+                'importance': feature_scores
+            }).sort_values('importance', ascending=False)
+            
+            # Convert X_selected back to DataFrame with feature names
+            X_selected_df = pd.DataFrame(X_selected_array, columns=selected_features)
             
             # Show feature importance
             st.subheader("Feature Importance")
@@ -549,7 +760,7 @@ def main():
             
             # Show correlation matrix
             st.subheader("Feature Correlation Matrix")
-            corr_matrix = X_selected.corr()
+            corr_matrix = X_selected_df.corr()
             fig = ff.create_annotated_heatmap(
                 z=corr_matrix.values,
                 x=list(corr_matrix.columns),
@@ -567,13 +778,13 @@ def main():
             
             # Show feature distributions using enhanced plotting
             st.subheader("Feature Distributions")
-            feature = st.selectbox("Select Feature", X_selected.columns)
+            feature = st.selectbox("Select Feature", selected_features)
             
             # Create two columns for plot and statistics
             col1, col2 = st.columns([2, 1])
             
             with col1:
-                fig, stats_table = plot_feature_distribution(X_selected, feature)
+                fig, stats_table = plot_feature_distribution(X_selected_df, feature)
                 st.plotly_chart(fig, use_container_width=True)
             
             with col2:
@@ -587,9 +798,11 @@ def main():
             
         except Exception as e:
             st.error(f"Error in feature selection: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
 
     # Model Results Section
-    else:
+    elif page == "Model Results":
         st.header("Model Results and Comparison")
         
         # Scale and target selection
@@ -599,25 +812,65 @@ def main():
         
         try:
             # Prepare data
-            X, y, feature_cols = st.session_state.pipeline.prepare_data(scale, target)
-            X_selected, _ = st.session_state.pipeline.select_features(X, y)
+            data = st.session_state.pipeline.prepare_data(scale, target)
+            if data is None or len(data) == 0:
+                st.error(f"No data available for {scale} with target {target}")
+                return
+                
+            # Format X and y for models
+            X = data.drop(columns=[target])
+            y = data[target]
+            
+            # Drop date columns and other problematic columns
+            date_columns = [col for col in X.columns if 'Date' in col or X[col].dtype.name in ['datetime64[ns]', 'datetime64']]
+            if date_columns:
+                X = X.drop(columns=date_columns)
             
             # Load models and scalers
-            models, scaler, label_encoders = load_models_and_scalers(scale, target)
+            models_and_scalers = load_models_and_scalers(scale, target)
             
-            if models is None:
+            if models_and_scalers is None:
                 st.error("Failed to load models. Please ensure models have been trained.")
                 return
             
+            # Get features used for modeling
+            features = models_and_scalers['features']
+            if features is None:
+                st.error("Feature list not found for the selected model.")
+                return
+                
+            # Select only the features used by the models
+            if all(feat in X.columns for feat in features):
+                X_selected = X[features]
+            else:
+                st.warning("Some model features are not present in the data. Using all available features.")
+                X_selected = X
+                
+            # Encode categorical features if needed
+            encoders = models_and_scalers['encoders']
+            if encoders:
+                for col in X_selected.columns:
+                    if col in encoders:
+                        X_selected[col] = encoders[col].transform(X_selected[col].astype(str))
+            
+            # Scale the features if needed
+            scaler = models_and_scalers['scaler']
+            if scaler:
+                X_scaled = scaler.transform(X_selected)
+            else:
+                X_scaled = X_selected.values
+            
             # Evaluate each model
-            for model_name, model in models.items():
+            for model_name, model in models_and_scalers['models'].items():
                 try:
                     # Make predictions
                     if model_name == 'PLS':
-                        # For PLS, we use all features since it handles feature selection internally
-                        y_pred = model.predict(X_selected)
+                        # For PLS, use the scaled data
+                        y_pred = model.predict(X_scaled)
+                        if isinstance(y_pred, np.ndarray) and y_pred.ndim > 1:
+                            y_pred = y_pred.ravel()
                     else:
-                        y_pred = model.predict(X_selected)
+                        y_pred = model.predict(X_scaled)
                     
                     rmse = np.sqrt(mean_squared_error(y, y_pred))
                     r2 = r2_score(y, y_pred)
@@ -646,10 +899,10 @@ def main():
                             st.write(f"Number of components: {model.n_components}")
                             
                             # Calculate explained variance
-                            X_transformed = model.transform(X_selected)
+                            X_transformed = model.transform(X_scaled)
                             X_reconstructed = model.inverse_transform(X_transformed)
-                            total_var = np.var(X_selected, axis=0).sum()
-                            explained_var = 1 - np.var(X_selected - X_reconstructed, axis=0).sum() / total_var
+                            total_var = np.var(X_scaled, axis=0).sum()
+                            explained_var = 1 - np.var(X_scaled - X_reconstructed, axis=0).sum() / total_var
                             st.write(f"Total explained variance: {explained_var * 100:.2f}%")
                             
                             # Show loadings
@@ -667,7 +920,7 @@ def main():
                     
                     # Show PLS components plot
                     if model_name == 'PLS':
-                        fig_components, fig_variance = plot_pls_components(model, X_selected, y, 
+                        fig_components, fig_variance = plot_pls_components(model, X_scaled, y, 
                             f"PLS Components Analysis - {scale}, {target}")
                         if fig_components is not None:
                             st.plotly_chart(fig_components, use_container_width=True)
@@ -675,38 +928,476 @@ def main():
                     
                 except Exception as e:
                     st.warning(f"Could not evaluate {model_name} model: {str(e)}")
+                    import traceback
+                    st.code(traceback.format_exc())
             
             # Interactive prediction
-            if models:
+            if models_and_scalers['models']:
                 st.subheader("Interactive Prediction")
-                st.write("Select feature values for prediction:")
                 
-                input_features = {}
-                for feature in X_selected.columns:
-                    mean_val = float(X_selected[feature].mean())
-                    std_val = float(X_selected[feature].std())
-                    input_features[feature] = st.slider(
-                        feature,
-                        min_value=mean_val - 2*std_val,
-                        max_value=mean_val + 2*std_val,
-                        value=mean_val,
+                st.write("Enter raw measurements and we'll predict the target values:")
+                
+                # Get the original process data features
+                raw_features = ['DO (%)', 'pH', 'OD', 'Temperature (deg C)']
+                
+                # Create input fields for raw measurements
+                raw_inputs = {}
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    for feature in raw_features:
+                        # Get statistics from the original data for reference
+                        feature_data = st.session_state.pipeline.process_data[feature].dropna()
+                        if not feature_data.empty:
+                            mean_val = float(feature_data.mean())
+                            min_val = float(feature_data.min())
+                            max_val = float(feature_data.max())
+                            raw_inputs[feature] = st.number_input(
+                                f"{feature} Value",
+                                min_value=min_val,
+                                max_value=max_val,
+                                value=mean_val,
+                                format="%.2f"
+                            )
+                
+                with col2:
+                    # Add initial conditions inputs
+                    inoculation_od = st.number_input(
+                        "Inoculation OD",
+                        min_value=0.0,
+                        max_value=2.0,
+                        value=0.1,
+                        format="%.2f"
+                    )
+                    
+                    initial_glucose = st.number_input(
+                        "Initial Glucose (g/L)",
+                        min_value=0.0,
+                        max_value=50.0,
+                        value=10.0,
+                        format="%.2f"
+                    )
+                    
+                    iptg = st.number_input(
+                        "IPTG (mM)",
+                        min_value=0.0,
+                        max_value=5.0,
+                        value=1.0,
                         format="%.2f"
                     )
                 
                 if st.button("Predict"):
-                    input_df = pd.DataFrame([input_features])
-                    st.write("\nPredictions:")
-                    for model_name, model in models.items():
+                    # Calculate the aggregated features
+                    calculated_features = {}
+                    
+                    # Basic calculation of means, mins, maxs (assuming we have just one value per feature)
+                    for feature in raw_features:
+                        calculated_features[f"{feature}_mean"] = raw_inputs[feature]
+                        calculated_features[f"{feature}_min"] = raw_inputs[feature]
+                        calculated_features[f"{feature}_max"] = raw_inputs[feature]
+                        # Standard deviation would be 0 for a single value
+                        calculated_features[f"{feature}_std"] = 0.0
+                    
+                    # Add initial conditions
+                    calculated_features["Inoculation OD"] = inoculation_od
+                    calculated_features["Initial Glucose (g/L)"] = initial_glucose
+                    calculated_features["IPTG (mM)"] = iptg
+                    
+                    # Add other required features with default values
+                    for feature in X_selected.columns:
+                        if feature not in calculated_features and feature != "Batch ID":
+                            calculated_features[feature] = 0.0
+                    
+                    # Display the calculated features
+                    with st.expander("View calculated aggregated features"):
+                        st.write("These are the aggregated features calculated from your raw inputs:")
+                        calc_features_df = pd.DataFrame([calculated_features])
+                        st.dataframe(calc_features_df[X_selected.columns])
+                    
+                    # Select only the features needed by the model
+                    input_df = calc_features_df[X_selected.columns]
+                    
+                    # Scale input features if needed
+                    if scaler:
+                        input_scaled = scaler.transform(input_df)
+                    else:
+                        input_scaled = input_df.values
+                    
+                    # Store predictions from all models
+                    predictions = {}
+                    prediction_values = []
+                    
+                    # Create columns for predictions
+                    st.write("### Model Predictions")
+                    model_cols = st.columns(len(models_and_scalers['models']))
+                    
+                    # Make predictions with each model
+                    for i, (model_name, model) in enumerate(models_and_scalers['models'].items()):
                         try:
-                            # All models can use the same input features since PLS handles feature selection internally
-                            prediction = model.predict(input_df)[0]
-                            st.write(f"{model_name}: {prediction:.4f}")
+                            if model_name == 'PLS':
+                                prediction = model.predict(input_scaled)[0]
+                                if isinstance(prediction, np.ndarray):
+                                    prediction = prediction[0]
+                            else:
+                                prediction = model.predict(input_scaled)[0]
+                                
+                            predictions[model_name] = prediction
+                            prediction_values.append(prediction)
+                            
+                            # Display prediction in respective column with styling
+                            with model_cols[i]:
+                                st.metric(
+                                    label=model_name,
+                                    value=f"{prediction:.4f}"
+                                )
                         except Exception as e:
-                            st.warning(f"Could not make prediction with {model_name}: {str(e)}")
+                            with model_cols[i]:
+                                st.error(f"Error: {str(e)}")
+                    
+                    # Add prediction validation section
+                    st.write("### Prediction Validation")
+                    
+                    # 1. Calculate average and variance across models
+                    if len(prediction_values) > 0:
+                        mean_pred = np.mean(prediction_values)
+                        std_pred = np.std(prediction_values)
+                        
+                        st.write(f"**Average prediction**: {mean_pred:.4f}")
+                        st.write(f"**Standard deviation across models**: {std_pred:.4f}")
+                        
+                        # Calculate coefficient of variation to assess prediction consistency
+                        if mean_pred != 0:
+                            cv = (std_pred / mean_pred) * 100
+                            st.write(f"**Coefficient of variation**: {cv:.2f}% {'(High variability across models)' if cv > 10 else '(Good consistency across models)'}")
+                    
+                    # 2. Find similar samples in the training data
+                    st.write("#### Similarity Analysis")
+                    st.write("Finding similar samples in the dataset for comparison:")
+                    
+                    # Calculate distances to each sample in the dataset
+                    distances = []
+                    for i in range(len(X_scaled)):
+                        # Use Euclidean distance
+                        dist = np.sqrt(np.sum((X_scaled[i] - input_scaled[0])**2))
+                        distances.append(dist)
+                    
+                    # Create a DataFrame with distances
+                    similarity_df = pd.DataFrame({
+                        'Sample Index': range(len(X_scaled)),
+                        'Distance': distances,
+                        'Actual Target': y.values
+                    })
+                    
+                    # Sort by distance and get top 5 most similar samples
+                    similar_samples = similarity_df.sort_values('Distance').head(5)
+                    
+                    # Show the similar samples
+                    st.write("Most similar samples in the dataset:")
+                    similar_samples_with_features = pd.concat([
+                        similar_samples, 
+                        X.iloc[similar_samples['Sample Index']].reset_index(drop=True)
+                    ], axis=1)
+                    
+                    st.dataframe(similar_samples_with_features)
+                    
+                    # Calculate mean of actual values from similar samples
+                    mean_similar = similar_samples['Actual Target'].mean()
+                    st.write(f"**Average target value of similar samples**: {mean_similar:.4f}")
+                    
+                    # Compare prediction with similar samples average
+                    pred_diff = mean_pred - mean_similar
+                    st.write(f"**Difference from similar samples average**: {pred_diff:.4f} ({'higher' if pred_diff > 0 else 'lower'})")
+                    
+                    # Visualization comparing predictions with similar samples
+                    fig = go.Figure()
+                    
+                    # Add model predictions
+                    for model_name, pred in predictions.items():
+                        fig.add_trace(go.Scatter(
+                            x=[model_name],
+                            y=[pred],
+                            mode='markers',
+                            marker=dict(size=12, color='blue'),
+                            name='Model predictions'
+                        ))
+                    
+                    # Add actual values of similar samples
+                    fig.add_trace(go.Scatter(
+                        x=['Similar1', 'Similar2', 'Similar3', 'Similar4', 'Similar5'],
+                        y=similar_samples['Actual Target'].values,
+                        mode='markers',
+                        marker=dict(size=10, color='green'),
+                        name='Similar samples (actual)'
+                    ))
+                    
+                    # Add mean line of similar samples
+                    fig.add_shape(
+                        type="line",
+                        x0=-0.5,
+                        y0=mean_similar,
+                        x1=len(predictions) + 4.5,
+                        y1=mean_similar,
+                        line=dict(
+                            color="green",
+                            width=2,
+                            dash="dash",
+                        )
+                    )
+                    
+                    # Add mean line of predictions
+                    fig.add_shape(
+                        type="line",
+                        x0=-0.5,
+                        y0=mean_pred,
+                        x1=len(predictions) - 0.5,
+                        y1=mean_pred,
+                        line=dict(
+                            color="blue",
+                            width=2,
+                            dash="dash",
+                        )
+                    )
+                    
+                    fig.update_layout(
+                        title="Comparison of Model Predictions vs. Similar Samples",
+                        xaxis_title="Model / Similar Sample",
+                        yaxis_title=f"Predicted {target}",
+                        legend_title="Data Source",
+                        hovermode="closest"
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Interpretation
+                    if abs(pred_diff) < 0.1 * mean_similar:
+                        st.success("✅ Prediction is consistent with similar samples in the dataset.")
+                    elif abs(pred_diff) < 0.25 * mean_similar:
+                        st.warning("⚠️ Prediction differs somewhat from similar samples, but may still be reasonable.")
+                    else:
+                        st.error("⚠️ Prediction differs significantly from similar samples. Consider reviewing input values.")
             
         except Exception as e:
             st.error(f"Error in model evaluation: {str(e)}")
-            st.write("Please ensure models have been trained and saved correctly.")
+            import traceback
+            st.code(traceback.format_exc())
+            st.warning("Please ensure models have been trained and saved correctly.")
+
+    # Outlier Detection Section
+    elif page == "Outlier Detection":
+        st.markdown('<h2 class="header">Outlier Detection Analysis</h2>', unsafe_allow_html=True)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            scale = st.selectbox(
+                "Select Scale",
+                ["1 mL", "30 L"],
+                key="od_scale_select"
+            )
+        
+        with col2:
+            target = st.selectbox(
+                "Select Target Variable",
+                ["Final OD (OD 600)", "GFPuv (g/L)"],
+                key="od_target_select"
+            )
+        
+        # Load models for the selected scale and target
+        model_data = load_models_and_scalers(scale, target)
+        
+        if model_data is None:
+            st.error("Failed to load models. Please ensure models have been trained.")
+            return
+        
+        # Prepare data for the selected scale
+        st.markdown('<h3 class="header">Batch Data and Outlier Detection</h3>', unsafe_allow_html=True)
+        st.info("This section allows you to identify potential outlier batches using different detection methods.")
+        
+        # Prepare data
+        data = st.session_state.pipeline.prepare_data(scale, target)
+        if data.empty:
+            st.error(f"No data available for {scale} with target {target}")
+            return
+        
+        # Display data summary
+        st.write(f"Number of batches for analysis: {len(data)}")
+        
+        # Extract features used for modeling
+        features = model_data['features']
+        if features is None:
+            st.error("Feature list not found for the selected model.")
+            return
+        
+        X = data[features]
+        
+        # Encode categorical features if needed
+        encoders = model_data['encoders']
+        if encoders:
+            X_encoded = X.copy()
+            for col in X.columns:
+                if col in encoders:
+                    X_encoded[col] = encoders[col].transform(X_encoded[col].astype(str))
+            X = X_encoded
+        
+        # Scale the features
+        scaler = model_data['scaler']
+        if scaler:
+            X_scaled = scaler.transform(X)
+        else:
+            X_scaled = X.values
+        
+        # Get outlier detection models
+        outlier_models = model_data['outlier_models']
+        if not outlier_models:
+            st.error("No outlier detection models found.")
+            return
+        
+        # Model selection for visualization
+        st.markdown('<h3 class="header">Outlier Detection Model Selection</h3>', unsafe_allow_html=True)
+        
+        # Select models to visualize
+        available_models = list(outlier_models.keys())
+        selected_models = st.multiselect(
+            "Select models to compare",
+            available_models,
+            default=available_models[:1] if available_models else [],
+            key="outlier_model_select"
+        )
+        
+        if not selected_models:
+            st.warning("Please select at least one model to visualize.")
+            return
+        
+        # Visualization tabs
+        st.markdown('<h3 class="header">Outlier Detection Visualizations</h3>', unsafe_allow_html=True)
+        
+        tabs = st.tabs(["Dimension Reduction", "Outlier Scores", "Comparative Analysis"])
+        
+        with tabs[0]:
+            st.write("### Dimension Reduction Visualization")
+            st.info("This visualization shows how samples are distributed in a reduced dimensional space.")
+            
+            # For each PCA or OPLS model selected
+            for model_name in selected_models:
+                if model_name in ['PCA_X', 'OPLS']:
+                    model = outlier_models[model_name]
+                    fig = plot_dimension_reduction(
+                        X_scaled, 
+                        model, 
+                        model_name, 
+                        f"{model_name} - {scale} - {target}"
+                    )
+                    if fig:
+                        st.plotly_chart(fig, use_container_width=True)
+        
+        with tabs[1]:
+            st.write("### Outlier Scores Visualization")
+            st.info("This visualization shows outlier scores for each sample. Lower scores indicate potential outliers.")
+            
+            # Plot outlier scores for selected models
+            outlier_scores = plot_outlier_scores(
+                X_scaled,
+                outlier_models,
+                [m for m in selected_models if m in ['IsolationForest', 'OneClassSVM']],
+                f"Outlier Analysis - {scale} - {target}"
+            )
+            
+            if outlier_scores:
+                st.plotly_chart(outlier_scores['box'], use_container_width=True)
+                st.plotly_chart(outlier_scores['scatter'], use_container_width=True)
+                
+                # Identify potential outliers
+                if 'scores' in outlier_scores:
+                    st.write("### Potential Outliers")
+                    st.info("Samples with outlier scores below threshold may be considered outliers.")
+                    
+                    # Threshold selection
+                    threshold = st.slider("Outlier threshold", 0.0, 1.0, 0.1, 0.05)
+                    
+                    # Display potential outliers for each model
+                    for model_name, scores in outlier_scores['scores'].items():
+                        outliers = np.where(scores < threshold)[0]
+                        if len(outliers) > 0:
+                            st.write(f"#### {model_name} detected {len(outliers)} potential outliers:")
+                            outlier_data = data.iloc[outliers].copy()
+                            outlier_data['Outlier Score'] = scores[outliers]
+                            st.dataframe(outlier_data)
+                        else:
+                            st.write(f"#### {model_name}: No outliers detected at threshold {threshold}")
+        
+        with tabs[2]:
+            st.write("### Comparative Analysis")
+            st.info("This visualization compares the outlier detection results across different models.")
+            
+            # Compare outlier detection across models
+            comparison_models = [m for m in selected_models if m in ['IsolationForest', 'OneClassSVM']]
+            
+            if len(comparison_models) > 1 and 'scores' in outlier_scores:
+                # Get scores for comparison
+                scores_dict = outlier_scores['scores']
+                
+                # Create comparison DataFrame
+                comparison_df = pd.DataFrame({
+                    model: scores for model, scores in scores_dict.items()
+                })
+                
+                # Add batch ID for reference
+                comparison_df['Batch ID'] = data['Batch ID'].values
+                
+                # Plot correlation heatmap between model scores
+                corr_matrix = comparison_df.drop(columns=['Batch ID']).corr()
+                
+                # Create heatmap with Plotly
+                fig = px.imshow(
+                    corr_matrix,
+                    text_auto=True,
+                    title=f"Correlation between model scores - {scale} - {target}",
+                    color_continuous_scale='RdBu_r',
+                    zmin=-1, zmax=1
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Model agreement analysis
+                st.write("#### Model Agreement Analysis")
+                
+                # Set threshold for outlier detection
+                agreement_threshold = st.slider(
+                    "Agreement threshold", 
+                    0.0, 1.0, 0.1, 0.05, 
+                    key="agreement_threshold"
+                )
+                
+                # Count how many models flag each sample as an outlier
+                outlier_counts = pd.DataFrame()
+                outlier_counts['Batch ID'] = data['Batch ID']
+                
+                for model in comparison_models:
+                    outlier_counts[f"{model}_outlier"] = (scores_dict[model] < agreement_threshold).astype(int)
+                
+                # Add a column with the total number of models that flag each sample
+                outlier_counts['Total Flags'] = outlier_counts[[f"{model}_outlier" for model in comparison_models]].sum(axis=1)
+                
+                # Create histogram of agreement counts
+                agreement_fig = px.histogram(
+                    outlier_counts, 
+                    x='Total Flags',
+                    title=f"Number of models flagging each sample as outlier (threshold: {agreement_threshold})",
+                    labels={'Total Flags': 'Number of models flagging as outlier'},
+                    height=400
+                )
+                st.plotly_chart(agreement_fig, use_container_width=True)
+                
+                # Display samples flagged by multiple models
+                multi_flagged = outlier_counts[outlier_counts['Total Flags'] > 1]
+                if not multi_flagged.empty:
+                    st.write(f"#### {len(multi_flagged)} samples flagged by multiple models:")
+                    
+                    # Merge with original data for more context
+                    multi_flagged_data = pd.merge(multi_flagged, data, on='Batch ID', how='inner')
+                    st.dataframe(multi_flagged_data)
+                else:
+                    st.write("#### No samples flagged by multiple models")
+            else:
+                st.warning("Please select at least two outlier detection models for comparison.")
 
 if __name__ == "__main__":
     main() 
