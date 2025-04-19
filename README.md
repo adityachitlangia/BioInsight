@@ -55,7 +55,7 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Running the Dashboard (You will need to upload Wrangled_Combined_Batch_Dataset.xlsx in root directory)
+### Running the Dashboard
 To launch the BioInsight dashboard:
 ```bash
 cd src/dashboard 
