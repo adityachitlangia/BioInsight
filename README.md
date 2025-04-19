@@ -87,6 +87,19 @@ python src/model_development.py
 - Visualize actual vs predicted values
 - Analyze PLS components and explained variance
 - Make interactive predictions
+- Enhanced visualization of PLS components with improved error handling
+
+## Recent Updates
+- **Enhanced UI/UX**: 
+  - Improved dashboard styling with custom CSS
+  - Added card-like structures for better content organization
+  - Enhanced visual hierarchy and navigation
+  - Responsive design improvements
+- **Improved Error Handling**:
+  - Better handling of data file paths
+  - Robust PLS component visualization
+  - Enhanced time series analysis functionality
+  - Improved batch selection and feature filtering
 
 ## Contributors
 - Aditya Chitlangia
