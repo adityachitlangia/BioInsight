@@ -16,6 +16,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import LabelEncoder
 from sklearn.feature_selection import SelectKBest, f_regression
 from plotly.subplots import make_subplots
+from inference import run_inference
 
 # Set page config must be the first Streamlit command
 st.set_page_config(
@@ -53,44 +54,188 @@ except ImportError:
             return None
 
 # Add custom CSS
-st.markdown("""
-    <style>
-    .main {
-        background-color: #f5f5f5;
-    }
-    .stButton>button {
-        background-color: #4CAF50;
-        color: white;
-        border-radius: 5px;
-        padding: 10px 20px;
-        font-weight: bold;
-    }
-    .stSelectbox, .stMultiselect {
-        background-color: white;
-        border-radius: 5px;
-    }
-    .stAlert {
-        border-radius: 10px;
-    }
-    .header {
-        color: #2c3e50;
-        font-weight: bold;
-        margin-bottom: 1rem;
-    }
-    /* Remove card-like styling */
-    .css-1d391kg {
-        background-color: transparent;
-        padding: 0;
-        box-shadow: none;
-    }
-    .metric-card {
-        background-color: transparent;
-        padding: 0;
-        box-shadow: none;
-        margin-bottom: 1rem;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+st.markdown(
+    """
+<style>
+/* Global font (optional, but recommended for consistency) */
+body {
+    font-family: 'Arial', sans-serif; /* Or 'Roboto', 'Open Sans', etc. */
+}
+
+.main {
+    background-color: #f5f5f5; /* Light gray background for the main content area */
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px; /* Add some margin below the main content */
+    min-height: 80vh; /* Ensure main content takes up at least 80% of viewport height */
+}
+
+/* Header styling */
+.header {
+    color: #2c3e50; /* Dark gray/blue for header text */
+    font-weight: bold;
+    margin-bottom: 1.5rem;
+    font-size: 2rem; /* Larger font size for headers */
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+/* Button styling */
+.stButton > button {
+    background-color: #4caf50; /* Green background */
+    color: white; /* White text */
+    border-radius: 5px;
+    padding: 10px 20px;
+    font-weight: bold;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.3s ease; /* Smooth transition */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2); /* Add a subtle shadow */
+}
+
+.stButton > button:hover {
+    background-color: #45a049; /* Darker green on hover */
+    box-shadow: 0 3px 7px rgba(0, 0, 0, 0.3); /* Increase shadow on hover */
+}
+
+.stButton > button:active {
+    background-color: #388e3c; /* Even darker green on active */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); /* Smaller shadow on active */
+}
+
+/* Input widget styling (text, number) */
+.stTextInput > div > div > input,
+.stNumberInput > div > div > input {
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 8px;
+    width: 100%; /* Make inputs take full width of their container */
+    margin-bottom: 10px; /* Add space below inputs */
+    font-size: 1rem;
+    box-sizing: border-box; /* Include padding and border in element's total width and height */
+}
+
+.stTextInput > div > div > input:focus,
+.stNumberInput > div > div > input:focus {
+    border-color: #3498db; /* Highlight border on focus */
+    outline: none; /* Remove default outline */
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2); /* Add a focus shadow */
+}
+
+/* Selectbox and Multiselect styling */
+.stSelectbox > div > div,
+.stMultiselect > div > div {
+    background-color: white;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    padding: 5px;
+    margin-bottom: 10px;
+    font-size: 1rem;
+}
+
+.stSelectbox > div > div:focus-within,
+.stMultiselect > div > div:focus-within{
+     border-color: #3498db; /* Highlight border on focus */
+    outline: none; /* Remove default outline */
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2); /* Add a focus shadow */
+}
+
+.stSelectbox > div > div select,
+.stMultiselect > div > div select{
+    font-size: 1rem;
+}
+
+/* Alert box styling */
+.stAlert {
+    margin-bottom: 15px;
+    background-color: #fff;
+}
+.stAlert-info {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+.stAlert-warning{
+    color: #856404;
+    background-color: #fff3cd;
+    border-color: #ffeeba;
+}
+.stAlert-danger{
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+/* Remove card-like styling */
+.css-1d391kg {
+    background-color: transparent;
+    padding: 0;
+    box-shadow: none;
+}
+
+.metric-card {
+    background-color: transparent;
+    padding: 0;
+    box-shadow: none;
+    margin-bottom: 1rem;
+}
+
+/* Dataframe styling */
+.stDataFrame {
+    padding: 10px;
+    margin-bottom: 20px;
+    overflow-x: auto; /* Enable horizontal scrolling for wide tables */
+}
+
+.stDataFrame table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: white;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.stDataFrame th,
+.stDataFrame td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #f0f0f0;
+    text-align: left;
+}
+
+.stDataFrame th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+    color: #333;
+}
+
+.stDataFrame tbody tr:hover {
+    background-color: #f8f8f8;
+}
+
+/* Slider Styling */
+.stSlider > div > div > div[data-baseweb="slider"] {
+    background-color: #4CAF50;
+    border-radius: 5px;
+}
+
+.stSlider > div > div > div[data-baseweb="slider"] > div[role="slider"]::before {
+    background-color: #45a049;
+    border-radius: 5px;
+    height: 10px;
+}
+
+.stSlider > div > div > div[data-baseweb="slider"] > div[role="slider"] {
+    border-radius: 50%;
+}
+
+/* Add space between elements */
+.st-element-container {
+    margin-bottom: 20px; /* Add 20px of margin below each Streamlit element */
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
 
 
 def load_1mL_sheet(sheet_name):
@@ -742,8 +887,8 @@ def main():
 
         page = st.radio(
             "Go to",
-            ["Data Processing", "Feature Selection",
-                "Model Results", "Outlier Detection", "Initial Conditions Visualization", "KPI Visualization"],
+            ["Data Processing",  "Initial Conditions Visualization", "KPI Visualization", "Feature Selection",
+                "Model Results", "Outlier Detection", "Time Series Mid-run Forecasting"],
             label_visibility="collapsed"
         )
 
@@ -765,41 +910,44 @@ def main():
         subset_data = st.session_state.pipeline.process_data[
             st.session_state.pipeline.process_data['Scale'] == scale].copy()
 
-        st.write("Missing Values Before Forward Fill:")
-        st.write("Data Shape:", subset_data.shape)
-        col1, col2 = st.columns(2)
-        with col1:
-            temp_df = subset_data.isnull().sum()
-            null_count_df = pd.DataFrame(
-                {'Feature': temp_df.index, 'Null Count': temp_df.values})
-            st.dataframe(null_count_df, width=10000)
+        # st.write("Missing Values Before Forward Fill:")
+        # st.write("Data Shape:", subset_data.shape)
+        # col1, col2 = st.columns(2)
+        # with col1:
+        #     temp_df = subset_data.isnull().sum()
+        #     null_count_df = pd.DataFrame(
+        #         {'Feature': temp_df.index, 'Null Count': temp_df.values})
+        #     st.dataframe(null_count_df, width=10000)
 
-        with col2:
-            st.plotly_chart(plot_missing_values(subset_data,
-                                                f"Missing Values Heatmap - {scale} (Before Forward Fill)"),
-                            use_container_width=True)
+        # with col2:
+        #     st.plotly_chart(plot_missing_values(subset_data,
+        #                                         f"Missing Values Heatmap - {scale} (Before Forward Fill)"),
+        #                     use_container_width=True)
 
         # Show data after forward fill
-        st.markdown('<h3 class="header">Data After Forward Fill</h3>',
-                    unsafe_allow_html=True)
+        # st.markdown('<h3 class="header">Data After Forward Fill</h3>',
+        #             unsafe_allow_html=True)
         batch_ids = subset_data['Batch ID'].copy()
         filled_data = subset_data.groupby('Batch ID').ffill()
         filled_data['Batch ID'] = batch_ids
 
-        st.write("Missing Values After Forward Fill:")
-        st.write("Data Shape:", filled_data.shape)
-        col3, col4 = st.columns(2)
-        with col3:
-            temp_df = filled_data.isnull().sum()
-            null_count_df = pd.DataFrame(
-                {'Feature': temp_df.index, 'Null Count': temp_df.values})
-            st.dataframe(null_count_df, width=10000)
+        # st.write("Missing Values After Forward Fill:")
+        # st.write("Data Shape:", filled_data.shape)
+        # col3, col4 = st.columns(2)
+        # with col3:
+        #     temp_df = filled_data.isnull().sum()
+        #     null_count_df = pd.DataFrame(
+        #         {'Feature': temp_df.index, 'Null Count': temp_df.values})
+        #     st.dataframe(null_count_df, width=10000)
 
-        with col4:
-            st.plotly_chart(plot_missing_values(filled_data,
-                                                f"Missing Values Heatmap - {scale} (After Forward Fill)"),
-                            use_container_width=True)
+        # with col4:
+        #     st.plotly_chart(plot_missing_values(filled_data,
+        #                                         f"Missing Values Heatmap - {scale} (After Forward Fill)"),
+        #                     use_container_width=True)
 
+        st.markdown('<h3 class="header">Batch Preview</h3>',
+                    unsafe_allow_html=True)
+        st.dataframe(filled_data, use_container_width=True)
         # Show batch statistics
         st.markdown('<h3 class="header">Batch Statistics</h3>',
                     unsafe_allow_html=True)
@@ -841,7 +989,400 @@ def main():
         else:
             st.warning("No time series features available in the data")
 
-    # Feature Selection Section
+    elif page == "Initial Conditions Visualization":
+        # Dataset selection
+        st.markdown("### Select a Dataset")
+        df_choice = st.selectbox(
+            # Unique key/label needed if used elsewhere
+            "Choose a dataset for Initial Conditions:",
+            ["1mL", "30L"],
+            key="ic_dataset_choice",  # Unique key
+            help="Select the dataset (1mL or 30L) for which to visualize initial conditions.",
+            placeholder="Select dataset...",
+            index=None,
+        )
+
+        if not df_choice:
+            st.info(
+                "Please select a dataset (1mL or 30L) to visualize initial conditions.")
+            st.stop()
+
+        try:
+            df = pd.DataFrame()
+            if df_choice == "1mL":
+                df = load_1mL_sheet(sheet_name="Initial Conditions")
+            elif df_choice == "30L":
+                df = load_30L_sheet(sheet_name="Initial Conditions")
+            else:
+                st.error(
+                    "Invalid dataset choice. Please select either '1mL' or '30L'.")
+                st.stop()
+
+            if df is None:  # Check if data loading failed
+                st.error(
+                    f"Failed to load 'Initial Conditions' data for {df_choice}. Please check the file and sheet name.")
+                st.stop()
+
+            st.success(
+                f"Loaded Initial Conditions data for {df_choice} successfully!")
+
+            st.markdown("---")
+            st.subheader("Initial Conditions Data Preview")
+            st.dataframe(df, use_container_width=True)
+
+            # --- Visualization Logic ---
+            if df_choice == "1mL":
+                st.subheader("96-Well Plate Visualization")
+
+                # Create a mapping for rows and columns to numerical indices
+                row_map = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4,
+                           'F': 5, 'G': 6, 'H': 7}  # Extend if you have more rows
+                # Adjust range if you have more columns
+                col_map = {str(i): i - 1 for i in range(1, 13)}
+
+                # Create a new DataFrame with numerical row and column indices for the heatmap
+                heatmap_df = df.copy()
+                heatmap_df['Row_Index'] = heatmap_df['Row'].map(row_map)
+                heatmap_df['Well_Index'] = heatmap_df['Well'].astype(
+                    str).map(col_map)
+
+                # Drop rows with NaN in the index columns if your original data doesn't perfectly fill the plate
+                heatmap_df = heatmap_df.dropna(
+                    subset=['Row_Index', 'Well_Index'])
+
+                # Let the user choose which column to visualize
+                color_column = st.selectbox("Select a column to visualize on the plate:",
+                                            ['Inoculation OD', 'IPTG (mM)', 'Initial Glucose (g/L)'])
+
+                # Create the heatmap
+                fig = px.imshow(heatmap_df.pivot_table(index='Row_Index', columns='Well_Index', values=color_column),
+                                labels=dict(x="Well", y="Row",
+                                            color=color_column),
+                                # Adjust range based on your 'Well' numbers
+                                x=[str(i) for i in range(1, 9)],
+                                # Adjust range based on your 'Row' letters
+                                y=list(row_map.keys())[:6],
+                                color_continuous_scale="viridis",
+                                title=f"Plate View of {color_column}")
+
+                # Customize layout for better readability
+                fig.update_layout(xaxis_side="top",
+                                  margin=dict(t=150, b=20, l=20, r=20))  # Adjust top margin (t)
+
+                # Add tooltips to show all the information on hover
+                fig.update_traces(
+                    hovertemplate="<b>Row:</b> %{y}<br><b>Well:</b> %{x}<br><b>Value</b>: %{z}<extra></extra>")
+
+                st.plotly_chart(fig, use_container_width=True)
+
+            elif df_choice == "30L":
+                st.subheader(
+                    "30L Bioreactor Visualization (Initial Conditions)")
+
+                # Check required column for 30L view
+                if 'Bioreactor' not in df.columns:
+                    st.error(
+                        f"Missing required column 'Bioreactor' for 30L visualization. Found: {df.columns.tolist()}")
+                    st.stop()
+
+                # Numerical columns available for visualization
+                numerical_cols_ic_30l = df.select_dtypes(
+                    include=np.number).columns.tolist()
+                # Exclude Bioreactor if it was numeric by chance
+                numerical_cols_ic_30l = [
+                    col for col in numerical_cols_ic_30l if col != 'Bioreactor']
+
+                if not numerical_cols_ic_30l:
+                    st.warning(
+                        "No numerical columns found in the Initial Conditions data to visualize for 30L bioreactors.")
+                    st.stop()
+
+                # Default selection - adjust if needed
+                default_ic_30l_col = 'Inoculation OD' if 'Inoculation OD' in numerical_cols_ic_30l else numerical_cols_ic_30l[
+                    0]
+
+                metric_to_visualize_ic = st.selectbox(
+                    "Select metric to visualize across bioreactors:",
+                    numerical_cols_ic_30l,
+                    index=numerical_cols_ic_30l.index(
+                        default_ic_30l_col),  # Set default
+                    key="ic_30l_metric_select"  # Unique key
+                )
+
+                # Get unique bioreactors, sorted numerically if possible
+                try:
+                    bioreactors = sorted(df['Bioreactor'].unique(), key=lambda x: int(
+                        x) if str(x).isdigit() else float('inf'))
+                except:
+                    bioreactors = sorted(df['Bioreactor'].unique())
+
+                n_bioreactors = len(bioreactors)
+                if n_bioreactors == 0:
+                    st.warning("No bioreactors found in the data.")
+                    st.stop()
+
+                # Define a layout for subplots
+                n_cols = 4  # Adjust number of columns as needed
+                n_rows = (n_bioreactors + n_cols - 1) // n_cols
+
+                # Determine color scale range for the selected metric
+                metric_data = df[metric_to_visualize_ic].dropna()
+                if metric_data.empty:
+                    st.warning(
+                        f"No data available for the selected metric '{metric_to_visualize_ic}'.")
+                    st.stop()
+
+                min_val = metric_data.min()
+                max_val = metric_data.max()
+                color_scale = px.colors.sequential.Viridis  # Use a Plotly scale
+
+                # Create subplots
+                fig_ic_30l = make_subplots(
+                    rows=n_rows,
+                    cols=n_cols,
+                    subplot_titles=[f"Bioreactor {br}" for br in bioreactors],
+                    vertical_spacing=0.1,  # Adjust spacing
+                    horizontal_spacing=0.05
+                )
+
+                row_idx, col_idx = 1, 1
+                for bioreactor in bioreactors:
+                    bioreactor_data = df[(df['Bioreactor'] == bioreactor) & pd.notna(
+                        df[metric_to_visualize_ic])]
+                    if bioreactor_data.empty:
+                        avg_metric = np.nan  # Handle cases where bioreactor has no data for the metric
+                    else:
+                        avg_metric = bioreactor_data[metric_to_visualize_ic].mean(
+                        )
+
+                    # Normalize the metric value for color mapping (handle NaN and division by zero)
+                    if pd.isna(avg_metric) or (max_val - min_val) == 0:
+                        normalized_value = 0.5  # Default to middle color if NaN or no range
+                    else:
+                        normalized_value = (
+                            avg_metric - min_val) / (max_val - min_val)
+
+                    # Get color from the Plotly scale
+                    color_index = int(normalized_value *
+                                      (len(color_scale) - 1))
+                    color_val = color_scale[color_index]
+
+                    # Add a single large marker with the color and value text
+                    fig_ic_30l.add_trace(go.Scatter(
+                        x=[0.5], y=[0.5],  # Center point
+                        mode='markers+text',
+                        marker=dict(size=35, color=color_val,
+                                    symbol='square'),  # Square marker
+                        text=[f"{avg_metric:.3f}" if pd.notna(
+                            avg_metric) else "N/A"],
+                        # White text for contrast
+                        textfont=dict(size=10, color="white"),
+                        hoverinfo='text',
+                        hovertext=f"Bioreactor {bioreactor}<br>{metric_to_visualize_ic}: {avg_metric:.4f}" if pd.notna(
+                            avg_metric) else f"Bioreactor {bioreactor}<br>{metric_to_visualize_ic}: N/A",
+                        showlegend=False),
+                        row=row_idx, col=col_idx)
+
+                    # Customize subplot layout (hide axes)
+                    fig_ic_30l.update_xaxes(visible=False, range=[
+                                            0, 1], row=row_idx, col=col_idx)
+                    fig_ic_30l.update_yaxes(visible=False, range=[
+                                            0, 1], row=row_idx, col=col_idx)
+
+                    # Move to the next subplot position
+                    col_idx += 1
+                    if col_idx > n_cols:
+                        col_idx = 1
+                        row_idx += 1
+
+                # Update overall layout
+                fig_ic_30l.update_layout(
+                    title_text=f"Average {metric_to_visualize_ic} by Bioreactor (Initial Conditions)",
+                    height=200 * n_rows,  # Adjust height based on rows
+                    showlegend=False,
+                    margin=dict(t=100, b=20, l=20, r=20)
+                )
+                st.plotly_chart(fig_ic_30l, use_container_width=True)
+
+        except Exception as e:
+            st.error(
+                f"An error occurred during Initial Conditions visualization: {e}")
+            import traceback
+            st.code(traceback.format_exc())
+
+    elif page == "KPI Visualization":
+        st.header("KPI Visualization")
+        # Dataset selection
+        st.markdown("### Select a Dataset")
+        choice = st.selectbox(
+            "Choose a dataset:",
+            ["1mL", "30L"],
+            help="Select the dataset you want to visualize.",
+            placeholder="Select a dataset to visualize",
+            index=None,
+        )
+
+        if not choice:
+            st.info(
+                "Please select a dataset (1mL or 30L) to visualize initial conditions.")
+            st.stop()
+
+        try:
+            df2 = pd.DataFrame()
+            if choice == "1mL":
+                df2 = load_1mL_sheet(sheet_name="Process KPIs")
+            elif choice == "30L":
+                df2 = load_30L_sheet(sheet_name="Process KPIs")
+            else:
+                st.error(
+                    "Invalid dataset choice. Please select either '1mL' or '30L'.")
+                st.stop()
+
+            if df2 is None:  # Check if data loading failed
+                st.error(
+                    f"Failed to load 'Initial Conditions' data for {df_choice}. Please check the file and sheet name.")
+                st.stop()
+
+            st.success(
+                f"Loaded {choice} dataset successfully!")
+
+            st.markdown("---")
+            st.subheader("Process KPI Data Preview")
+            st.dataframe(df2, use_container_width=True)
+
+            if choice == "1mL":
+                st.subheader("96-Well Plate Visualization")
+
+                # Create a mapping for rows and columns to numerical indices
+                row_map = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4,
+                           'F': 5, 'G': 6, 'H': 7}  # Extend if you have more rows
+                # Adjust range if you have more columns
+                col_map = {str(i): i - 1 for i in range(1, 13)}
+
+                # Create a new DataFrame with numerical row and column indices for the heatmap
+                heatmap_df = df2.copy()
+                # print(heatmap_df.columns)
+                heatmap_df['Row_Index'] = heatmap_df['Row'].map(row_map)
+                heatmap_df['Well_Index'] = heatmap_df['Well'].astype(
+                    str).map(col_map)
+
+                # Drop rows with NaN in the index columns if your original data doesn't perfectly fill the plate
+                heatmap_df = heatmap_df.dropna(
+                    subset=['Row_Index', 'Well_Index'])
+
+                # Let the user choose which column to visualize
+                color_column = st.selectbox("Select a column to visualize on the plate:",
+                                            ['IPTG (mM)', 'Run Time (h)', 'Final OD (OD 600)',
+                                             'GFPuv (g/L)', 'Total GFP (g)', 'Total Biomass (g)',
+                                             'Biomass\n/Substrate\n(g/g)', 'Product\n/Substrate (g/g)',
+                                             'Product\n/Biomass \n(g/g)', 'Volumetric productivity (g/hr*L)',
+                                             'Growth Rate (1/h)'])
+
+                # Create the heatmap
+                fig = px.imshow(heatmap_df.pivot_table(index='Row_Index', columns='Well_Index', values=color_column),
+                                labels=dict(x="Well", y="Row",
+                                            color=color_column),
+                                # Adjust range based on your 'Well' numbers
+                                x=[str(i) for i in range(1, 9)],
+                                # Adjust range based on your 'Row' letters
+                                y=list(row_map.keys())[:6],
+                                color_continuous_scale="viridis",
+                                title=f"Plate View of {color_column}")
+
+                # Customize layout for better readability
+                fig.update_layout(xaxis_side="top",
+                                  margin=dict(t=150, b=20, l=20, r=20))  # Adjust top margin (t)
+
+                # Add tooltips to show all the information on hover
+                fig.update_traces(
+                    hovertemplate="<b>Row:</b> %{y}<br><b>Well:</b> %{x}<br><b>Value</b>: %{z}<extra></extra>")
+
+                st.plotly_chart(fig, use_container_width=True)
+
+            elif choice == "30L":
+
+                st.subheader("30L Bioreactor Visualization")
+
+                # Get unique bioreactors
+                bioreactors = sorted(df2['Bioreactor'].unique())
+                n_bioreactors = len(bioreactors)
+
+                # Define a layout
+                n_cols = 3
+                # Calculate number of rows needed
+                n_rows = (n_bioreactors + n_cols - 1) // n_cols
+
+                temp = df2.dropna(axis=1, how='all').drop(
+                    columns=['Bioreactor'])
+                numerical_cols = temp.select_dtypes(
+                    include=['number']).columns.tolist()
+                metric_to_visualize = st.selectbox(
+                    "Select metric to visualize:", numerical_cols)
+
+                # Determine color scale
+                min_val = df2[metric_to_visualize].min()
+                max_val = df2[metric_to_visualize].max()
+                color_scale_name = 'viridis'
+
+                # Define a fallback viridis-like color list
+                fallback_viridis = ["#440154", "#482878", "#3e4a89", "#31688e",
+                                    "#26828e", "#1f9e89", "#35b779", "#6ece58", "#b5dc36", "#fde725"]
+
+                # Create subplots
+                fig = make_subplots(rows=n_rows, cols=n_cols,
+                                    subplot_titles=[f"Bioreactor {br}" for br in bioreactors])
+
+                row_idx, col_idx = 1, 1
+                for i, bioreactor in enumerate(bioreactors):
+                    bioreactor_data = df2[df2['Bioreactor'] == bioreactor]
+                    avg_metric = bioreactor_data[metric_to_visualize].mean()
+
+                    # Normalize the metric value
+                    if max_val - min_val == 0:
+                        normalized_value = 0
+                    else:
+                        normalized_value = (
+                            avg_metric - min_val) / (max_val - min_val)
+
+                    # Get color from the color list
+                    color_index = int(normalized_value *
+                                      (len(fallback_viridis) - 1))
+                    color_val = fallback_viridis[color_index]
+
+                    # Add colored background
+                    fig.add_trace(go.Scatter(x=[0.5], y=[0.5],
+                                             mode='markers',
+                                             marker=dict(
+                        size=50, color=color_val, symbol='square'),
+                        showlegend=False),
+                        row=row_idx, col=col_idx)
+                    # Add text annotation
+                    fig.add_trace(go.Scatter(x=[0.5], y=[0.5],
+                                             mode='text',
+                                             text=[f"{avg_metric:.4f}"],
+                                             textfont=dict(
+                                                 size=12, color="white"),
+                                             showlegend=False),
+                                  row=row_idx, col=col_idx)
+
+                    # Customize subplot layout
+                    fig.update_xaxes(visible=False, range=[
+                        0, 1], row=row_idx, col=col_idx)
+                    fig.update_yaxes(visible=False, range=[
+                        0, 1], row=row_idx, col=col_idx)
+
+                    col_idx += 1
+                    if col_idx > n_cols:
+                        col_idx = 1
+                        row_idx += 1
+
+                fig.update_layout(
+                    title_text=f"Average {metric_to_visualize} by Bioreactor (Darker = Less)", showlegend=True)
+                st.plotly_chart(fig, use_container_width=True)
+
+        except Exception as e:
+            st.error(f"Error loading dataset: {e}")
+
     elif page == "Feature Selection":
         st.header("Feature Selection Analysis")
 
@@ -876,9 +1417,9 @@ def main():
             categorical_cols = [
                 col for col in X_encoded.columns if col not in numeric_cols]
 
-            st.write(f"Numerical columns: {len(numeric_cols)}")
-            st.write(
-                f"Categorical columns to encode: {len(categorical_cols)}, {categorical_cols}")
+            # st.write(f"Numerical columns: {len(numeric_cols)}")
+            # st.write(
+            #     f"Categorical columns to encode: {len(categorical_cols)}, {categorical_cols}")
 
             # Encode all non-numeric columns
             for col in categorical_cols:
@@ -922,22 +1463,22 @@ def main():
                             use_container_width=True)
 
             # Show correlation matrix
-            st.subheader("Feature Correlation Matrix")
-            corr_matrix = X_selected_df.corr()
-            fig = ff.create_annotated_heatmap(
-                z=corr_matrix.values,
-                x=list(corr_matrix.columns),
-                y=list(corr_matrix.index),
-                annotation_text=np.around(corr_matrix.values, decimals=2),
-                colorscale='RdBu',
-                showscale=True
-            )
-            fig.update_layout(
-                title=f"Correlation Matrix - Selected Features ({scale}, {target})",
-                height=800,
-                width=800
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            # st.subheader("Feature Correlation Matrix")
+            # corr_matrix = X_selected_df.corr()
+            # fig = ff.create_annotated_heatmap(
+            #     z=corr_matrix.values,
+            #     x=list(corr_matrix.columns),
+            #     y=list(corr_matrix.index),
+            #     annotation_text=np.around(corr_matrix.values, decimals=2),
+            #     colorscale='RdBu',
+            #     showscale=True
+            # )
+            # fig.update_layout(
+            #     title=f"Correlation Matrix - Selected Features ({scale}, {target})",
+            #     height=800,
+            #     width=800
+            # )
+            # st.plotly_chart(fig, use_container_width=True)
 
             # Show feature distributions using enhanced plotting
             st.subheader("Feature Distributions")
@@ -1611,399 +2152,35 @@ def main():
                 st.warning(
                     "Please select the IsolationForest and OneClassSVM models to compare.")
 
-    elif page == "Initial Conditions Visualization":
-        # Dataset selection
-        st.markdown("### Select a Dataset")
-        df_choice = st.selectbox(
-            # Unique key/label needed if used elsewhere
-            "Choose a dataset for Initial Conditions:",
-            ["1mL", "30L"],
-            key="ic_dataset_choice",  # Unique key
-            help="Select the dataset (1mL or 30L) for which to visualize initial conditions.",
-            placeholder="Select dataset...",
-            index=None,
+    elif page == "Time Series Mid-run Forecasting":
+        st.markdown(
+            '<h2 class="header">Time Series Mid-run Forecasting</h2>', unsafe_allow_html=True)
+        st.info(
+            "This section allows you to upload a .csv file and forecast future values using the trained time series model.")
+
+        file = st.file_uploader(
+            "Upload a .csv file with the time series data",
+            type=["csv"],
+            key="file_uploader"
         )
-
-        if not df_choice:
-            st.info(
-                "Please select a dataset (1mL or 30L) to visualize initial conditions.")
+        if file is not None:
+            st.success("File uploaded successfully!")
+        else:
             st.stop()
-
-        try:
-            df = pd.DataFrame()
-            if df_choice == "1mL":
-                df = load_1mL_sheet(sheet_name="Initial Conditions")
-            elif df_choice == "30L":
-                df = load_30L_sheet(sheet_name="Initial Conditions")
-            else:
-                st.error(
-                    "Invalid dataset choice. Please select either '1mL' or '30L'.")
-                st.stop()
-
-            if df is None:  # Check if data loading failed
-                st.error(
-                    f"Failed to load 'Initial Conditions' data for {df_choice}. Please check the file and sheet name.")
-                st.stop()
-
-            st.success(
-                f"Loaded Initial Conditions data for {df_choice} successfully!")
-
-            st.markdown("---")
-            st.subheader("Initial Conditions Data Preview")
-            st.dataframe(df, use_container_width=True)
-
-            # --- Visualization Logic ---
-            if df_choice == "1mL":
-                st.subheader("96-Well Plate Visualization")
-
-                # Create a mapping for rows and columns to numerical indices
-                row_map = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4,
-                           'F': 5, 'G': 6, 'H': 7}  # Extend if you have more rows
-                # Adjust range if you have more columns
-                col_map = {str(i): i - 1 for i in range(1, 13)}
-
-                # Create a new DataFrame with numerical row and column indices for the heatmap
-                heatmap_df = df.copy()
-                heatmap_df['Row_Index'] = heatmap_df['Row'].map(row_map)
-                heatmap_df['Well_Index'] = heatmap_df['Well'].astype(
-                    str).map(col_map)
-
-                # Drop rows with NaN in the index columns if your original data doesn't perfectly fill the plate
-                heatmap_df = heatmap_df.dropna(
-                    subset=['Row_Index', 'Well_Index'])
-
-                # Let the user choose which column to visualize
-                color_column = st.selectbox("Select a column to visualize on the plate:",
-                                            ['Inoculation OD', 'IPTG (mM)', 'Initial Glucose (g/L)'])
-
-                # Create the heatmap
-                fig = px.imshow(heatmap_df.pivot_table(index='Row_Index', columns='Well_Index', values=color_column),
-                                labels=dict(x="Well", y="Row",
-                                            color=color_column),
-                                # Adjust range based on your 'Well' numbers
-                                x=[str(i) for i in range(1, 9)],
-                                # Adjust range based on your 'Row' letters
-                                y=list(row_map.keys())[:6],
-                                color_continuous_scale="viridis",
-                                title=f"Plate View of {color_column}")
-
-                # Customize layout for better readability
-                fig.update_layout(xaxis_side="top",
-                                  margin=dict(t=150, b=20, l=20, r=20))  # Adjust top margin (t)
-
-                # Add tooltips to show all the information on hover
-                fig.update_traces(
-                    hovertemplate="<b>Row:</b> %{y}<br><b>Well:</b> %{x}<br><b>Value</b>: %{z}<extra></extra>")
-
-                st.plotly_chart(fig, use_container_width=True)
-
-            elif df_choice == "30L":
-                st.subheader(
-                    "30L Bioreactor Visualization (Initial Conditions)")
-
-                # Check required column for 30L view
-                if 'Bioreactor' not in df.columns:
-                    st.error(
-                        f"Missing required column 'Bioreactor' for 30L visualization. Found: {df.columns.tolist()}")
-                    st.stop()
-
-                # Numerical columns available for visualization
-                numerical_cols_ic_30l = df.select_dtypes(
-                    include=np.number).columns.tolist()
-                # Exclude Bioreactor if it was numeric by chance
-                numerical_cols_ic_30l = [
-                    col for col in numerical_cols_ic_30l if col != 'Bioreactor']
-
-                if not numerical_cols_ic_30l:
-                    st.warning(
-                        "No numerical columns found in the Initial Conditions data to visualize for 30L bioreactors.")
-                    st.stop()
-
-                # Default selection - adjust if needed
-                default_ic_30l_col = 'Inoculation OD' if 'Inoculation OD' in numerical_cols_ic_30l else numerical_cols_ic_30l[
-                    0]
-
-                metric_to_visualize_ic = st.selectbox(
-                    "Select metric to visualize across bioreactors:",
-                    numerical_cols_ic_30l,
-                    index=numerical_cols_ic_30l.index(
-                        default_ic_30l_col),  # Set default
-                    key="ic_30l_metric_select"  # Unique key
-                )
-
-                # Get unique bioreactors, sorted numerically if possible
-                try:
-                    bioreactors = sorted(df['Bioreactor'].unique(), key=lambda x: int(
-                        x) if str(x).isdigit() else float('inf'))
-                except:
-                    bioreactors = sorted(df['Bioreactor'].unique())
-
-                n_bioreactors = len(bioreactors)
-                if n_bioreactors == 0:
-                    st.warning("No bioreactors found in the data.")
-                    st.stop()
-
-                # Define a layout for subplots
-                n_cols = 4  # Adjust number of columns as needed
-                n_rows = (n_bioreactors + n_cols - 1) // n_cols
-
-                # Determine color scale range for the selected metric
-                metric_data = df[metric_to_visualize_ic].dropna()
-                if metric_data.empty:
-                    st.warning(
-                        f"No data available for the selected metric '{metric_to_visualize_ic}'.")
-                    st.stop()
-
-                min_val = metric_data.min()
-                max_val = metric_data.max()
-                color_scale = px.colors.sequential.Viridis  # Use a Plotly scale
-
-                # Create subplots
-                fig_ic_30l = make_subplots(
-                    rows=n_rows,
-                    cols=n_cols,
-                    subplot_titles=[f"Bioreactor {br}" for br in bioreactors],
-                    vertical_spacing=0.1,  # Adjust spacing
-                    horizontal_spacing=0.05
-                )
-
-                row_idx, col_idx = 1, 1
-                for bioreactor in bioreactors:
-                    bioreactor_data = df[(df['Bioreactor'] == bioreactor) & pd.notna(
-                        df[metric_to_visualize_ic])]
-                    if bioreactor_data.empty:
-                        avg_metric = np.nan  # Handle cases where bioreactor has no data for the metric
-                    else:
-                        avg_metric = bioreactor_data[metric_to_visualize_ic].mean(
-                        )
-
-                    # Normalize the metric value for color mapping (handle NaN and division by zero)
-                    if pd.isna(avg_metric) or (max_val - min_val) == 0:
-                        normalized_value = 0.5  # Default to middle color if NaN or no range
-                    else:
-                        normalized_value = (
-                            avg_metric - min_val) / (max_val - min_val)
-
-                    # Get color from the Plotly scale
-                    color_index = int(normalized_value *
-                                      (len(color_scale) - 1))
-                    color_val = color_scale[color_index]
-
-                    # Add a single large marker with the color and value text
-                    fig_ic_30l.add_trace(go.Scatter(
-                        x=[0.5], y=[0.5],  # Center point
-                        mode='markers+text',
-                        marker=dict(size=35, color=color_val,
-                                    symbol='square'),  # Square marker
-                        text=[f"{avg_metric:.3f}" if pd.notna(
-                            avg_metric) else "N/A"],
-                        # White text for contrast
-                        textfont=dict(size=10, color="white"),
-                        hoverinfo='text',
-                        hovertext=f"Bioreactor {bioreactor}<br>{metric_to_visualize_ic}: {avg_metric:.4f}" if pd.notna(
-                            avg_metric) else f"Bioreactor {bioreactor}<br>{metric_to_visualize_ic}: N/A",
-                        showlegend=False),
-                        row=row_idx, col=col_idx)
-
-                    # Customize subplot layout (hide axes)
-                    fig_ic_30l.update_xaxes(visible=False, range=[
-                                            0, 1], row=row_idx, col=col_idx)
-                    fig_ic_30l.update_yaxes(visible=False, range=[
-                                            0, 1], row=row_idx, col=col_idx)
-
-                    # Move to the next subplot position
-                    col_idx += 1
-                    if col_idx > n_cols:
-                        col_idx = 1
-                        row_idx += 1
-
-                # Update overall layout
-                fig_ic_30l.update_layout(
-                    title_text=f"Average {metric_to_visualize_ic} by Bioreactor (Initial Conditions)",
-                    height=200 * n_rows,  # Adjust height based on rows
-                    showlegend=False,
-                    margin=dict(t=100, b=20, l=20, r=20)
-                )
-                st.plotly_chart(fig_ic_30l, use_container_width=True)
-
-        except Exception as e:
-            st.error(
-                f"An error occurred during Initial Conditions visualization: {e}")
-            import traceback
-            st.code(traceback.format_exc())
-
-    elif page == "KPI Visualization":
-        st.header("KPI Visualization")
-        # Dataset selection
-        st.markdown("### Select a Dataset")
-        choice = st.selectbox(
-            "Choose a dataset:",
-            ["1mL", "30L"],
-            help="Select the dataset you want to visualize.",
-            placeholder="Select a dataset to visualize",
-            index=None,
-        )
-
-        if not choice:
-            st.info(
-                "Please select a dataset (1mL or 30L) to visualize initial conditions.")
-            st.stop()
-
-        try:
-            df2 = pd.DataFrame()
-            if choice == "1mL":
-                df2 = load_1mL_sheet(sheet_name="Process KPIs")
-            elif choice == "30L":
-                df2 = load_30L_sheet(sheet_name="Process KPIs")
-            else:
-                st.error(
-                    "Invalid dataset choice. Please select either '1mL' or '30L'.")
-                st.stop()
-
-            if df2 is None:  # Check if data loading failed
-                st.error(
-                    f"Failed to load 'Initial Conditions' data for {df_choice}. Please check the file and sheet name.")
-                st.stop()
-
-            st.success(
-                f"Loaded {choice} dataset successfully!")
-
-            st.markdown("---")
-            st.subheader("Process KPI Data Preview")
-            st.dataframe(df2, use_container_width=True)
-
-            if choice == "1mL":
-                st.subheader("96-Well Plate Visualization")
-
-                # Create a mapping for rows and columns to numerical indices
-                row_map = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4,
-                           'F': 5, 'G': 6, 'H': 7}  # Extend if you have more rows
-                # Adjust range if you have more columns
-                col_map = {str(i): i - 1 for i in range(1, 13)}
-
-                # Create a new DataFrame with numerical row and column indices for the heatmap
-                heatmap_df = df2.copy()
-                # print(heatmap_df.columns)
-                heatmap_df['Row_Index'] = heatmap_df['Row'].map(row_map)
-                heatmap_df['Well_Index'] = heatmap_df['Well'].astype(
-                    str).map(col_map)
-
-                # Drop rows with NaN in the index columns if your original data doesn't perfectly fill the plate
-                heatmap_df = heatmap_df.dropna(
-                    subset=['Row_Index', 'Well_Index'])
-
-                # Let the user choose which column to visualize
-                color_column = st.selectbox("Select a column to visualize on the plate:",
-                                            ['IPTG (mM)', 'Run Time (h)', 'Final OD (OD 600)',
-                                             'GFPuv (g/L)', 'Total GFP (g)', 'Total Biomass (g)',
-                                             'Biomass\n/Substrate\n(g/g)', 'Product\n/Substrate (g/g)',
-                                             'Product\n/Biomass \n(g/g)', 'Volumetric productivity (g/hr*L)',
-                                             'Growth Rate (1/h)'])
-
-                # Create the heatmap
-                fig = px.imshow(heatmap_df.pivot_table(index='Row_Index', columns='Well_Index', values=color_column),
-                                labels=dict(x="Well", y="Row",
-                                            color=color_column),
-                                # Adjust range based on your 'Well' numbers
-                                x=[str(i) for i in range(1, 9)],
-                                # Adjust range based on your 'Row' letters
-                                y=list(row_map.keys())[:6],
-                                color_continuous_scale="viridis",
-                                title=f"Plate View of {color_column}")
-
-                # Customize layout for better readability
-                fig.update_layout(xaxis_side="top",
-                                  margin=dict(t=150, b=20, l=20, r=20))  # Adjust top margin (t)
-
-                # Add tooltips to show all the information on hover
-                fig.update_traces(
-                    hovertemplate="<b>Row:</b> %{y}<br><b>Well:</b> %{x}<br><b>Value</b>: %{z}<extra></extra>")
-
-                st.plotly_chart(fig, use_container_width=True)
-
-            elif choice == "30L":
-
-                st.subheader("30L Bioreactor Visualization")
-
-                # Get unique bioreactors
-                bioreactors = sorted(df2['Bioreactor'].unique())
-                n_bioreactors = len(bioreactors)
-
-                # Define a layout
-                n_cols = 3
-                # Calculate number of rows needed
-                n_rows = (n_bioreactors + n_cols - 1) // n_cols
-
-                temp = df2.dropna(axis=1, how='all').drop(
-                    columns=['Bioreactor'])
-                numerical_cols = temp.select_dtypes(
-                    include=['number']).columns.tolist()
-                metric_to_visualize = st.selectbox(
-                    "Select metric to visualize:", numerical_cols)
-
-                # Determine color scale
-                min_val = df2[metric_to_visualize].min()
-                max_val = df2[metric_to_visualize].max()
-                color_scale_name = 'viridis'
-
-                # Define a fallback viridis-like color list
-                fallback_viridis = ["#440154", "#482878", "#3e4a89", "#31688e",
-                                    "#26828e", "#1f9e89", "#35b779", "#6ece58", "#b5dc36", "#fde725"]
-
-                # Create subplots
-                fig = make_subplots(rows=n_rows, cols=n_cols,
-                                    subplot_titles=[f"Bioreactor {br}" for br in bioreactors])
-
-                row_idx, col_idx = 1, 1
-                for i, bioreactor in enumerate(bioreactors):
-                    bioreactor_data = df2[df2['Bioreactor'] == bioreactor]
-                    avg_metric = bioreactor_data[metric_to_visualize].mean()
-
-                    # Normalize the metric value
-                    if max_val - min_val == 0:
-                        normalized_value = 0
-                    else:
-                        normalized_value = (
-                            avg_metric - min_val) / (max_val - min_val)
-
-                    # Get color from the color list
-                    color_index = int(normalized_value *
-                                      (len(fallback_viridis) - 1))
-                    color_val = fallback_viridis[color_index]
-
-                    # Add colored background
-                    fig.add_trace(go.Scatter(x=[0.5], y=[0.5],
-                                             mode='markers',
-                                             marker=dict(
-                        size=50, color=color_val, symbol='square'),
-                        showlegend=False),
-                        row=row_idx, col=col_idx)
-                    # Add text annotation
-                    fig.add_trace(go.Scatter(x=[0.5], y=[0.5],
-                                             mode='text',
-                                             text=[f"{avg_metric:.4f}"],
-                                             textfont=dict(
-                                                 size=12, color="white"),
-                                             showlegend=False),
-                                  row=row_idx, col=col_idx)
-
-                    # Customize subplot layout
-                    fig.update_xaxes(visible=False, range=[
-                        0, 1], row=row_idx, col=col_idx)
-                    fig.update_yaxes(visible=False, range=[
-                        0, 1], row=row_idx, col=col_idx)
-
-                    col_idx += 1
-                    if col_idx > n_cols:
-                        col_idx = 1
-                        row_idx += 1
-
-                fig.update_layout(
-                    title_text=f"Average {metric_to_visualize} by Bioreactor (Darker = Less)", showlegend=True)
-                st.plotly_chart(fig, use_container_width=True)
-
-        except Exception as e:
-            st.error(f"Error loading dataset: {e}")
+        with st.spinner("Running inference..."):
+            try:
+                upload = pd.read_csv(file)
+                run_inference(upload)
+            except Exception as e:
+                st.error(f"Error during inference: {e}")
+                import traceback
+                st.code(traceback.format_exc())
+                st.warning(
+                    "Please ensure the uploaded file is in the correct format and contains the necessary columns.")
+
+        st.write("### Forecasting Results")
+        st.image("forecast_plot.png", caption="Forecast Plot")
+        st.success("Forecast plot generated successfully!")
 
 
 if __name__ == "__main__":
